@@ -1,0 +1,199 @@
+---
+title: "Assigenement 2"
+author: "sayeli Chakraborty"
+date: "May 29, 2019"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(psych)
+library(caret)
+library(glmnet)
+```
+
+```{r}
+data(mtcars)
+data <- mtcars
+str(data)
+```
+
+```{r}
+set.seed(222)
+ind <- sample(2,nrow(data),replace = T,prob = c(0.7,0.3))
+tr_mt <- data[ind==1,]
+ts_mt <- data[ind==2,]
+```
+Now we can see out training set has 23 obs & test set has 9 obs
+
+# Custom Control Parameters
+```{r}
+cust<-trainControl(method = 'repeatedcv',number = 3,repeats = 5)
+```
+Here cv is for cross validation, 3 fold cross validation and reapeting it for 5 times
+
+# LINER MODEL 
+```{r}
+set.seed(223)
+m<-train(mpg~.,tr_mt,method='lm',trControl=cust)
+m
+summary(m)
+plot(m$finalModel)
+```
+Root Meas Squared Error is 8(It is the average distance an observation fall from the regression line in the units of the dependent variable).
+R-squared is 86%( We can conclude that 86.7% of the total sum of sqares can be explained by using the estimated regression equation to predict the mpg. Rest is the error)
+Residual we can see is normally distribute.
+In Normal Q  Q Plot We can find that the Stardadized residualsa are falling in the line.
+
+# Ridge Regression
+```{r}
+set.seed(225)
+r<-train(mpg~.,
+         tr_mt,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=0,lambda=seq(0.001,1,length=5)),
+         trControl=cust)
+r
+
+```
+So here we can see when lamda is one RMSE is the lowest & Rsquared is the highest. In Ridge anyways alpha remains zero. So when the lamda is 1 (Strenght of the penalty over Coefficients) coefficeints can be best expalined. 
+
+Lets plot the results for further Analysis
+#Results
+```{r}
+plot(r)
+plot(r$finalModel, xvar = "lambda", Label = T)
+plot(r$finalModel, xvar = "dev", Label = T)
+plot(varImp(r,scale = FALSE))
+
+```
+So Here from plot we can see that in the Right side is RMSE based on cross validation. 
+Here Error is Higest when lamda was still 0.5. It has started comming down when gradually lamda value started increasing. And the error is minimum when lamda is one.So the best value which we get for lamda is 1.
+
+
+After Plotting FinalModel: When Log Lamda is 9 or 10 all the coefficients are zero. When we started to relax lamda cofficient stared to grow. At the top we have all 10 independent variables
+
+ Fraction Devience Explained Graph: 40% of the variablity is explained properly with slight growth in the coefficient and it grows gradually goes upto 80% after that the coffifient started jump. After 80% area the model is overfitted.
+
+
+In VarImp Model. We can see am is of higest importance, then wt and slowly it comes down.
+
+
+#lasso Regression
+
+```{r}
+set.seed(226)
+l<-train(mpg~.,
+         tr_mt,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=1,lambda=seq(0.001,1,length=5)),
+         trControl=cust)
+l
+
+```
+
+
+# Result
+```{r}
+plot(l)
+plot(l$finalModel, xvar = "lambda", Label = T)
+plot(l$finalModel, xvar = "dev", Label = T)
+plot(varImp(l,scale = FALSE))
+```
+So Here from plot we can see that in the Right side is RMSE based on cross validation. 
+Here Error is Higest when lamda was still 0.1  It has started comming down when gradually lamda value started increasing.it comes down drastically at 0.3 And the error is minimum when lamda is one.So the best value which we get for lamda is 1.
+
+
+Fraction Devience Explained Graph: 60% of the variablity is explained properly with slight growth in the coefficient by two variables and it grows gradually goes upto 80% after that the coffifient started jump. After 80% area the model is overfitted.
+
+In Lasso the model is better now as we can see the two variables which are inportant are weight & no of Cylinders. Rest all are less importance and few are removed due to multicolliniarity.
+
+# Elastic Net Regression
+```{r}
+set.seed(227)
+e<-train(mpg~.,
+         tr_mt,method='glmnet',
+         tuneGrid=expand.grid(alpha=seq(0,1,length=5), lambda=seq(0.001,1,length=5)),
+         trControl=cust)
+e
+
+```
+So here we can see when lamda 1  & Alpha is one RMSE is the lowest & Rsquared is the highest. In Ridge anyways alpha remains zero. So when the lamda is 1 (Strenght of the penalty over Coefficients) coefficeints can be best expalined.
+
+# Reasults
+```{r}
+plot(e)
+plot(e$finalModel, xvar = "lambda", Label = T)
+plot(e$finalModel, xvar = "dev", Label = T)
+plot(varImp(e,scale = FALSE))
+```
+
+
+Fraction Devience Explained Graph: 60% of the variablity is explained properly with slight growth in the coefficient by two variables and it grows gradually goes upto 80% after that the coffifient started jump. After 80% area the model is overfitted.
+
+We can see the two variables which are inportant are weight & no of Cylinders. Rest all are less importance and few are removed due to multicolliniarity.
+
+
+#Compare Model
+```{r}
+m_list <- list(LM=m, Ridge=r,Lasso=l,EN=e)
+res <- resamples(m_list)
+summary(res)
+xyplot(res,metric = "RMSE")
+
+```
+So here the we can see the RMSE is least for Elastic Net & R Squared is higest of 81 % for Elastic Net. So it is the best model
+
+Here from the xyplot it is very much clear that the RMSE for Linear is Higher than Ridge. As all the dots are above the line.
+
+#best model
+```{r}
+e$bestTune
+best <- e$finalModel
+coef(best,s=e$bestTune$lambda)
+```
+So here the best IV is Weight & then No: of Cylinders and then gross Horsepower.
+
+# Save Final Model for Use
+
+```{r}
+saveRDS(e,"Final_Model.RDS")
+fm <- readRDS("Final_Model.RDS")
+print(fm)
+```
+
+#Predict
+```{r}
+p1 <- predict(fm,tr_mt)
+sqrt(mean((tr_mt$mpg-p1)^2))
+
+p2 <- predict(fm,ts_mt)
+sqrt(mean((ts_mt$mpg-p2)^2))
+
+```
+
+
+Hence the RMSE for Test data is less than train data. Elastic Net Model Fitted well 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
