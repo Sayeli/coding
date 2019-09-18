@@ -1,0 +1,258 @@
+---
+title: "LINEAR REGRESSION ASSINGMENT"
+author: "sayeli Chakraborty"
+date: "26 August, 2019"
+Subject: Statistics
+Registration Number: EISIN181927
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Dataset updload
+```{r}
+ENB2012_data <- read_excel("D:/Statistics/ASSINGMENT/ENB2012_data.xlsx")
+dataset <-  ENB2012_data
+```
+library
+```{r}
+library(VIF)
+library(car)
+library(carData)
+library(corrplot) # We'll use corrplot later on in this example too.
+library(visreg) # This library will allow us to show multivariate graphs.
+library(rgl)
+library(knitr)
+library(scatterplot3d)
+```
+#Splitting  dataset
+
+```{r}
+library(caTools)
+set.seed(125)
+split = sample.split(dataset$Y2, SplitRatio = 2/3)
+training_set = subset(dataset, split==TRUE)
+test_set= subset(dataset, split==FALSE)
+
+```
+
+As we have two predictor y1 & y2. so making sto subsets . one with y1 as predictor variable and 
+another y2 as predictor variable
+
+```{r}
+training_set1 = training_set[,-10]
+test_set1 = test_set[,-10]
+
+training_set2 =training_set[,-9]
+test_set2 = test_set[,-9]
+
+
+```
+#Feature Scaling
+
+```{r}
+training_set1[-9] = scale(training_set1[-9])
+test_set1[-9] = scale(test_set1[-9])
+
+training_set2[-9] = scale(training_set2[-9])
+test_set2[-9] = scale(test_set2[-9])
+```
+#Fitting Simple Linear Regression on training set1
+
+For Any linear Regression :
+H0 is that the b1(the slope is zero) & H1 = b1(slope is not zero) 
+But if the p value is below the significance level then we reject the null hypothesis and say there is a linear relationship between the DV and ID. 
+```{r}
+regressor = lm(formula = Y1~.,
+               data = training_set1)
+summary(regressor)
+
+# Removing two ID X6 as p_value is above the significance Level )
+
+regressor1 = lm(formula = Y1~ X1+ X2+ X3 +X5 + X7 +X8,
+                data = training_set1)
+summary(regressor1)
+anova(regressor1)
+
+```
+1) Here in the above Models P value is below the significance level and we can reject the null hypothesis.
+2) Standard Error of the estimate is the Standard Deviation of the Error Term. It is Square root of Mean Square Error. So the average distance of the data points from the fitted line is about 2.961 (which is good). Less the distance means data points are close to the fitted line.
+3) R-Squared = (Sum of Squared Regression / Total Sum of Squares) here is it 91.2% Which means that
+the ression line has expalined 91 percent of the error rest 9 % is the error. So here the model is a god fit.
+4) F-Statistic is 754.5( which means the modelmis good and we can reject the null hypothesis.)
+
+5) Now if we compaire n=bothe the models(regressor & Regressor1) not much of a difference only think which went significantly high is the F statistics. So the 2nd model is better fit and we will use the model 2 to fit in the test set for prediction.
+
+
+# Now we will look into the Assumptions of the Regression model
+
+
+# Plot a correlation graph
+```{r}
+newdatacor = cor(training_set1)
+corrplot(newdatacor, method = "number")
+```
+From the above correlation plot it seems multicollinearity exist. And thats why the model is over fitted.
+
+# Multicolliniarity Checking
+```{r}
+vif(regressor1)
+```
+It is very much Clear that the Model has ID variables X1, X2, X5. Which are corelated to each other. Hence for a better model we need to remove these independent variables.
+
+Lets plots the Model to check the residuals.
+```{r}
+plot(regressor1, pch=16)
+par(mfrow=c(1,1))
+```
+From plot no 1 : all the residuals are more or less within a band of range to the fitted line. From here we can make an assumptions that the residuals are homoskedastic. but still later we will be performing test for homoskedasticity.
+
+From plot No 2: Quarntile-Quantile Plot. It predicts if the residuals are Normally distributed or not. from this plot few points indicateds that its dosent fall in the Line. But mostly it seems to be normaliiy distributed. Will we conduct normality test.
+
+From plot No 3: Almost same as Plot one. Only the residual are standardizes and ploted against the fitted values. this also gives an idea about the homoskedasticity of the residuals.
+
+From plot no 4: This grap if for outliers. We can see that it has some leverage points but dosent seems like it has Influencial points.
+
+#Checking Normality Assumptions
+H0: Error is normality distributed, H1: Error are not normally distributed.
+Here we want the errors to be normally distributed. Hence to accept the null hypothesis we need the p value to be more then the significance level
+```{r}
+res<-regressor1$residuals
+library(nortest)
+ad.test(res)            #Anderson-Darling test
+cvm.test(res)           #Cramer Von Mises test
+pearson.test(res)       #Pearson's test
+shapiro.test(res)       #Shapiro Wilk test
+qqnorm(res)
+qqline(res)
+boxplot(res)
+
+
+```
+Mean is Zero we can consider the residual to be normally distributed.
+
+#checking Homoscedasticity assumption
+H0: errors are homoscedastic  against H1: not homoscedastic
+p value should be greater than your 'alpha' level
+```{r}
+library(lmtest)
+bptest(regressor1)  # Breusch - pagan test
+ncvTest(regressor1) # Cook - Weisberg test
+```
+In Cook- Weisberg Test: p_Value is less then alpha. So errors are  not homoscedastic.
+
+#Checking autocorrelation assumption
+H0: errors are  not autocorrelated  against  H1: error are autocorrelated
+p value should be greater than 'alpha' level
+```{r}
+dwtest(regressor1)# Durbin-Watson test
+```
+P Value is less then Singificance level. Errors are auto correlated.
+
+#Residual Analysis
+#Influential points and leverage points
+
+```{r}
+library(MASS)
+#Outlier points
+#Studentized residuals, value>3 indicates outliers
+res1 <- studres(regressor1)
+training_set1[which(res1>3),]
+#Studentized residuals, value>2 indicates outliers
+New <-training_set1[which(res1>2),]
+
+```
+So no outliers found in the first case. So when i took the Resisudal values greater then 2, it found total 32 observation considered as outliers.
+
+#Influential points (Deletion diagnostics): If the data has Influencail Point then It will Change the Slope and Intercept
+```{r}
+#Dffit,  value>2 indicates influential point
+Inf1<- training_set1[which(dffits(regressor1)>2),]
+Inf1
+# Cook's distance, value>1 indicates influential point
+Inf2 <-training_set1[which(cooks.distance(regressor1)>1),]
+Inf2
+```
+So No influencial point found to be deleted.
+
+# leverage point: If the data has Levarage potss it will cange the R suares and Mean Square Error
+value > 3p/n indicates that it is a leverage point
+p = no. of predictors, n = no. of observations
+```{r}
+lev_points <- training_set1[which(hatvalues(regressor1)>3*3/nrow(training_set1)),]
+head(lev_points)
+
+```
+so we got 130 levarage points. Which we need to remove. 
+
+So based on all the assumption test we conducted. We found the following:
+1) Multi collinearity Exist between the IV : X1, X2, X5 (These are leading to overfitting. We
+will remove these variables and check the model again)
+2) Residuals are normally distributed
+3) Auto corrrelation exists
+4) Residuals are heteroscedastic
+5) We have Outliers: Studentized residuals 32 observations
+6) We have leverage points: hatvalues 130 observations
+
+Before that we will do plotting of the residuals
+```{r}
+res<-regressor1$residuals
+fit_val<-regressor1$fitted.values
+#Plotting normal residuals
+ plot(fit_val,res,main = "Plot of residual v/s fitted values")
+ abline(h=mean(res),col="red")
+ 
+ #Plotting studentized residuals
+ plot(fit_val,studres(regressor1),main = "plot of studentized residuals v/s fitted values")
+ abline(h=mean(res),col="blue") 
+ 
+  #Plotting rstudent residuals
+ plot (fit_val,rstudent(regressor1),main = "plot of rstudent residuals v/s fitted values")
+ abline(h=mean(res),col="green")
+ 
+ #plotting Hatvalues residuals
+ plot(fit_val, hatvalues(regressor1), main = "plot of hatvalues V/S fitted values")
+ plot(lev_points)
+ 
+
+```
+
+
+Before Removing the Outliers. Lets do Error Forcasting using MSE and MAPE.
+
+We will be conducting it on Training set and test set both
+
+```{r}
+#predict the test set result
+y_pred = predict(regressor1, newdata = test_set1[,-9])
+
+
+```
+
+Mean Absolute Pecentage Error:Trainning data
+```{r}
+sum(abs(res)/training_set1$Y1)/nrow(training_set1)
+#Error 9.8%
+
+```
+Mean Absolute Pecentage Error:test data
+```{r}
+sum(abs(test_set1$Y1-y_pred)/test_set1$Y1)/nrow(test_set1)
+#Error 9.7%
+```
+
+Mean square error
+```{r}
+sum((res)^2)/nrow(training_set1)
+
+sum((test_set1$Y1-y_pred)^2)/nrow(test_set1)
+
+```
+
+
+
+
+
+
+
