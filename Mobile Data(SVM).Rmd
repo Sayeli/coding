@@ -1,0 +1,252 @@
+---
+title: "Dataminning 2"
+author: "Sayeli Chakraborty"
+date: "August 26, 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Importing the dataset
+```{r}
+dataset = read.csv('train.csv')
+head(dataset)
+```
+
+#Independent Variable Selelction for the dataset
+```{r}
+Linear_Model_1 <- lm (price_range ~ .,
+                      data = dataset)                      
+
+summary(Linear_Model_1)
+```
+So my just running a simple Linear Model we can see that following Independent variables have significance in the model.
+1) Battery Power 2) Internal Memory 3) MObile Weight 4) Px_Height 5) Px_weight 6) ram
+
+# Now lets run the Stepwise method and analysis the best indepent variable
+
+```{r}
+Linear_Model_2 <- lm(price_range ~ 1 ,
+                     data = dataset)
+summary(Linear_Model_2)
+
+Model_stepwise<- step (Linear_Model_2,
+                       direction = "both",
+                       scope = formula(Linear_Model_1)) 
+
+```
+As we Know Lower the AIC Score better is the Model Formula. Here we can see lowest score is (-4547.73)
+# And the Formula is
+price_range ~ ram + battery_power + px_height + px_width + mobile_wt +int_memory + dual_sim + three_g + wifi.
+
+# Still to many Variables for the Model. 
+# Moving to Ridgge, Lasso and Elstic Net for Model Selection
+
+library
+```{r}
+library(psych)
+library(caret)
+library(glmnet)
+```
+
+# Custom Control Parameters
+```{r}
+cust<-trainControl(method = 'repeatedcv',number = 5,repeats = 10)
+# Here cv is for cross validation, 5 fold cross validation and reapeting it for 10 times
+```
+
+```{r}
+set.seed(225)
+
+dataset[-21] <- scale(dataset[-21])
+
+head(dataset)
+```
+
+# Ridge
+```{r}
+r<-train(price_range~.,
+         data = dataset,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=0,lambda=seq(0.001,1,length=10)),
+         trControl=cust)
+r
+```
+So here we can see when lamda is one RMSE is the lowest & Rsquared is the highest. 
+In Ridge anyways alpha remains zero. So when the lamda is 0.001 (Strenght of the penalty over Coefficients) coefficeints can be best expalined.
+#Lets plot the results for further Analysis
+```{r}
+plot(r)
+#So Here from plot we can see that in the Right side is RMSE based on cross validation. 
+#Here Error is Higest when lamda 1.And the error is minimum when lamda is 0.005.
+#So the best value which we get for lamda is 0.001.
+plot(r$finalModel, xvar = "lambda", Label = T)
+#After Plotting FinalModel: When Log Lamda is 4 to 6 all the coefficients are zero.
+#When we started to relax lamda cofficient stared to grow. 
+plot(r$finalModel, xvar = "dev", Label = T)
+#Fraction Devience Explained Graph: 40% of the variablity is explained properly with slight growth 
+#in the coefficient and it grows gradually goes upto 80% after that the coffifient started jump. 
+#After 80% area the model is overfitted.
+plot(varImp(r,scale = FALSE))
+```
+#Here with ridge we can see the important variables are ram,battery power, px_width, px_height, mobile weight
+
+# Lasso
+```{r}
+set.seed(226)
+l<-train(price_range~.,
+         data = dataset,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=1,lambda=seq(0.001,1,length=10)),
+         trControl=cust)
+l
+```
+#The final values used for the model were alpha = 1 and lambda = 0.001.
+
+
+#Result
+```{r}
+plot(l)
+plot(l$finalModel, xvar = "lambda", Label = T)
+plot(l$finalModel, xvar = "dev", Label = T)
+plot(varImp(l,scale = FALSE))
+```
+#Here we can see the important variables are ram,battery power, px_width, px_height, mobile weight
+
+# Elastic Net
+```{r}
+set.seed(227)
+e<-train(price_range~.,
+         data = dataset,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=seq(0,1,length=5), lambda=seq(0.001,1,length=10)),
+         trControl=cust)
+e
+```
+
+# Results
+```{r}
+plot(e)
+plot(e$finalModel, xvar = "lambda", Label = T)
+plot(e$finalModel, xvar = "dev", Label = T)
+plot(varImp(e,scale = FALSE))
+```
+#Here we can see the important variables are ram,battery power, px_width, px_height, mobile weight
+
+
+#MOdel Comparison
+```{r}
+m_list <- list(Ridge=r,Lasso=l,EN=e)
+res <- resamples(m_list)
+summary(res)
+xyplot(res,metric = "RMSE")
+```
+So from the summary we can see that Mean Absolute Error & Root Mean Square Error are the lowest for Elasatic Net and Rsquared 91.7 percent is explained
+in Elastic Net Model. Heance we select this model as the best Model for Variable Selection
+
+So the important variables are ram, battery power, px_height,px_weight,mobile wt.
+
+To Remove the multicollinearity Effect will use anothers Model which is LARS
+# Least Angel Regression Model
+
+```{r}
+#install.packages("selectiveInference")
+library(selectiveInference)
+library(psych)
+library(glmnet)
+```
+
+
+```{r}
+set.seed(235)
+df1 <- scale(dataset[1:20])
+larfit <- lar(as.matrix(df1),dataset$price_range,verbose = T)
+
+```
+So the model took the most correlated variable 14 which is ram. and strated the eteration with a lamda value of 45.2. Higher the value of lamda shirnks athe variable the most.
+
+```{r}
+larfit$beta
+```
+Here we can see at 1st value of lambda ram coffient was low then it steadly started increasing and at the last value of lamda which is 0.014 the ram coffieint is 1.027 which is the highest. and its perfect because ram was the most significant Independent variable for the model. In the same was all the other variables are treated and cofficients are calculated. and variables with multicollinearity remained shinked. and less signifincant
+variables are given very low cofficient value.
+
+# lets see the plot to visualize it in a better way.
+```{r}
+plot(larfit)
+```
+So finally the Independent variables to work with are 13, 14, 9 & 1 i.e, Battery Power, Mobile Weight
+px_width, px_height and ram
+
+# Lets move to Support Vector Machine
+
+```{r}
+training_set = dataset
+test_set = read.csv('test.csv')
+head(test_set)
+```
+
+#Scaling of test set
+```{r}
+test_set = test_set[2:21]
+test_set = scale(test_set)
+```
+So to do SVM in Rstudio we need the below package
+```{r}
+library(e1071)
+```
+#SVM with all the important variable
+```{r}
+classifier = svm(formula = price_range~ battery_power + mobile_wt + ram + px_width + px_height,
+                  data = training_set,
+                  type = 'C-classification',
+                  gamma = 2,
+                  kernel = 'radial')
+```
+
+# Predicting the Training set results
+```{r}
+x_pred = predict(classifier, newdata = training_set[-21])
+cm = table(training_set$price_range, x_pred)
+cm
+```
+# predicting the test set results
+```{r}
+y_pred = predict(classifier, newdata = test_set)
+y_pred
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
