@@ -1,0 +1,305 @@
+---
+title: "Data Minning 1"
+author: "Sayeli Chakraborty"
+date: "August 26, 2019"
+Registration Number : "EISIN181927"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Library
+```{r}
+library(psych)
+library(caret)
+library(glmnet)
+```
+
+```{r}
+dataset = read.csv('hitllers.csv')
+head(dataset)
+```
+
+
+# Sum of Missing Value
+```{r}
+sum(is.na(dataset))
+```
+
+# plot the missing Values
+```{r}
+library(VIM)
+aggr_plot <- aggr(dataset, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(data), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+# Removing the not required Variable
+
+```{r}
+dataset1 <- dataset[, c(2:14,17,18,19,20)]
+```
+# Feature Scaling
+
+```{r}
+
+dataset1[-17] <- scale(dataset1[-17])
+head(dataset1)
+
+```
+
+Now to run the models and to find the NA Values. We will divide the dataset into taining and test set.
+Training set will not contain NA Value.
+
+```{r}
+test_set <- dataset1[is.na(dataset1$Salary),]
+head(test_set)
+training_set <- dataset1[!is.na(dataset1$Salary),]
+```
+
+# Custom Control Parameters
+```{r}
+cust<-trainControl(method = 'repeatedcv',number = 10,repeats = 5)
+```
+# LINER MODEL 
+```{r}
+set.seed(224)
+m<-train(Salary~.,
+         training_set,
+         method='lm',
+         trControl=cust)
+m
+summary(m)
+plot(m$finalModel)
+```
+Root Meas Squared Error is 340.(It is the average distance an observation fall from the regression line in the units of the dependent variable).
+Adjusted R-squared is 50%( We can conclude that 50.7% of the total sum of sqares can be explained by using the estimated regression equation to predict the Salary. Rest is the error)
+Residual we can see is normally distribute.Though it has few outliers
+In Normal Q  Q Plot We can find that the Stardadized residualsa are falling in the line with few outliers
+
+
+# RIDGE MODEL
+```{r}
+r<-train(Salary~.,
+         training_set,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=0,lambda=seq(0.001,1,length=10)),
+         trControl=cust)
+r
+plot(r)
+plot(r$finalModel,xlab='RMSE',label = T)
+plot(r$finalModel,xvar='dev',label = T)
+plot(varImp(r,scale = FALSE))
+
+
+```
+So here we can see for all values of lamda RMSE is the same & Rsquared is the same. In Ridge anyways alpha remains zero. So when the lamda is 1 (Strenght of the penalty over Coefficients) coefficeints can be best expalined. 
+
+So Here from plot we can see that in the Right side is RMSE based on cross validation. 
+Here Error is same throughout till lamda is 1. So the best value which we get for lamda is 1.
+
+
+After Plotting FinalModel: Intially all the coefficients are zero. When we started to relax lamda cofficient of the variables stared to grow. At the top we have all 16 independent variables
+
+ Fraction Devience Explained Graph: 40% of the variablity is explained properly with slight growth in the coefficient and it grows gradually goes upto 50% after that the coffifient started jump.
+
+
+In VarImp Model. We can see am is of higest importance, then wt and slowly it comes down.
+
+
+# LASSO MODEL
+
+```{r}
+l<-train(Salary~.,
+         training_set,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=1,lambda=seq(0.001,1,length=10)),
+         trControl=cust)
+l
+plot(l)
+plot(l$finalModel,xlab='RMSE',label = T)
+plot(l$finalModel,xvar='dev',label = T)
+plot(varImp(l,scale = FALSE))
+```
+
+So Here from plot we can see that in the Right side is RMSE based on cross validation. 
+Here Error is Higest when lamda was still 0.1  It has started comming down when gradually lamda value started increasing. And the error is minimum when lamda is one.So the best value which we get for lamda is 1.
+
+
+Fraction Devience Explained Graph: 40% of the variablity is explained properly with slight growth in the coefficient by two variables and it grows gradually goes upto 55% after that the coffifient started jump. After 55% area the model is overfitted.
+
+In Lasso the model is better now as we can see the  variables which are important given on the top and few are removed due to multicolliniarity.
+
+# ELASTIC NET
+
+```{R}
+e<-train(Salary~.,
+         training_set,
+         method='glmnet',
+         tuneGrid=expand.grid(alpha=seq(0,1,length=10),lambda=seq(0.001,1,length=10)),
+         trControl=cust)
+e
+plot(e,xlab='RMSE',label = T)
+plot(e$finalModel,xvar='dev',label = T)
+plot(varImp(e,scale = FALSE))
+
+
+```
+So here we can see when lamda 1  & Alpha is one RMSE is the lowest & Rsquared is the highest. In Ridge anyways alpha remains zero. So when the lamda is 1 (Strenght of the penalty over Coefficients) coefficeints can be best expalined.
+
+#Model Comparision
+
+```{R}
+m_list <- list(LM=m, Ridge=r,Lasso=l,EN=e)
+res <- resamples(m_list)
+summary(res)
+xyplot(res,metric = "RMSE")
+
+
+```
+From the Above Comparision of the Model Based on the Root Mean Square Error we can see Elastic Net is the Best Model.
+
+# BEST MODEL
+
+```{R}
+
+e$bestTune
+best <- e$finalModel
+coef(best,s=e$bestTune$alpha)
+```
+
+NOw we need to predict the missing values of the salary. We will use the Best Model
+```{r}
+Pred_Na <- predict(e, test_set)
+Pred_Na
+```
+
+Lest Check the Accuracy of the model RMSE
+
+```{r}
+pred_1 <- predict(e, training_set)
+tr_rmse <- sqrt(mean((training_set$Salary-pred_1)^2))
+tr_rmse
+
+
+```
+2.	Apply Naive Bayes classifier to House_votes.csv dataset in order to predict whether the voter is a republican or a democrat based on their votes. The dataset has 16 binary attributes and 2 classes. The following is the details of the attributes:
+
+# Data Preprocessing Template
+# Importing the dataset
+```{r}
+dataset = read.csv('House votes.csv', header = FALSE)
+
+```
+# Encoding categorical data
+
+```{r}
+dataset$V17 = factor(dataset$V17,
+                         levels = c('republican', 'democrat'),
+                         labels = c(1, 2))
+dataset$V1 = factor(dataset$V1,
+                           levels = c('n', 'y', '?'),
+                           labels = c(0, 1, 2))
+dataset$V2 = factor(dataset$V2,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V3 = factor(dataset$V3,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V4 = factor(dataset$V4,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V5 = factor(dataset$V5,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V6 = factor(dataset$V6,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V7 = factor(dataset$V7,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V8 = factor(dataset$V8,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V9 = factor(dataset$V9,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V10 = factor(dataset$V10,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V11 = factor(dataset$V11,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V12 = factor(dataset$V12,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V13 = factor(dataset$V13,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V14 = factor(dataset$V14,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V15 = factor(dataset$V15,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+dataset$V16 = factor(dataset$V16,
+                    levels = c('n', 'y', '?'),
+                    labels = c(0, 1, 2))
+```
+
+```{r}
+head(dataset)
+
+```
+# Splitting the dataset into the Training set and Test set
+# install.packages('caTools')
+```{r}
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$V17, SplitRatio = 0.70)
+training_set = subset(dataset, split == TRUE)
+print(nrow(training_set))
+test_set = subset(dataset, split == FALSE)
+print(nrow(test_set))
+```
+
+# Fitting classifier to the Training set
+```{r}
+library(e1071)
+classifier = naiveBayes(x= training_set[-17], 
+                        y = training_set$V17)
+```
+
+# Predicting the Test set results
+```{r}
+y_pred = predict(classifier, newdata = test_set[-17])
+
+```
+
+# Making the Confusion Matrix
+```{r}
+cm = table(test_set[, 17], y_pred)
+cm
+```
+
+```{r}
+library(caret) 
+results <- confusionMatrix(cm)
+results 
+```
+Evaluate the performance of the classifier in terms of accuracy, recall, precision and f1 scores. 
+
+```{r}
+precision <- results$byClass['Pos Pred Value']
+recall <- results$byClass['Sensitivity']
+
+f_measure <- 2 * ((precision * recall) / (precision + recall))
+f_measure
+
+
+```
+
+
+
+
+
